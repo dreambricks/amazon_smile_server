@@ -4,12 +4,18 @@ from utils import FaceLandmarks
 import keyboard
 import socket
 import time
+import parameters as pm
+import serial
+import threading
 
 # Configurações de UDP
 UDP_IP = "127.0.0.1"  # IP de destino
-UDP_PORT = 5008        # Porta de destino
-UDP_PORT_SENDER = 5007
+UDP_PORT = pm.UDP_PORT
+UDP_PORT_SENDER = pm.UDP_PORT_SENDER # Porta de destino
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Cria o socket UDP
+
+port = pm.SERIAL_PORT
+baudrate = pm.SERIAL_BAUDRATE
 
 # Variáveis de controle
 draw_mask = False
@@ -18,6 +24,35 @@ terminate_program = False
 analyzing = False  # Indica se a análise está ativa
 start_time = None  # Armazena o tempo inicial da análise
 
+
+def serial_reader():
+    try:
+        ser = serial.Serial(port, baudrate, timeout=1)
+        print(f"Conectado à porta {port} com baudrate {baudrate}")
+    except serial.SerialException as e:
+        print(f"Erro ao abrir a porta serial: {e}")
+        return
+
+    try:
+        while True:
+            if ser.in_waiting > 0:
+                mensagem = ser.readline().decode('utf-8').strip()
+                print(f"Mensagem recebida: {mensagem}")
+                serial_action(mensagem)
+
+    except KeyboardInterrupt:
+        print("Encerrando a leitura da porta serial.")
+    finally:
+        if ser.is_open:
+            ser.close()
+            print("Porta serial fechada.")
+
+def serial_action(message):
+    if message == "1":
+        keyboard.press_and_release('m')
+
+serial_thread = threading.Thread(target=serial_reader, daemon=True)
+serial_thread.start()
 
 # Função para escutar mensagens UDP
 def listen_udp():
@@ -85,6 +120,7 @@ while ret:
     cv2.imshow('frame', frame)
     if cv2.waitKey(25) & 0xFF == ord('q'):
         break
+
 
 cap.release()
 cv2.destroyAllWindows()
