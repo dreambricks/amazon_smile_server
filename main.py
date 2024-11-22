@@ -7,27 +7,17 @@ import time
 
 # Configurações de UDP
 UDP_IP = "127.0.0.1"  # IP de destino
-UDP_PORT = 5006        # Porta de destino
-UDP_PORT_SENDER = 5005
+UDP_PORT = 5008        # Porta de destino
+UDP_PORT_SENDER = 5007
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Cria o socket UDP
 
 # Variáveis de controle
 draw_mask = False
-draw_stats = True
+draw_stats = False
 terminate_program = False
 analyzing = False  # Indica se a análise está ativa
 start_time = None  # Armazena o tempo inicial da análise
 
-# Função callback de evento de teclado
-def on_key_event(event):
-    global draw_mask, draw_stats, terminate_program
-    print(f"Key {event.name} was pressed")
-    if event.name == 'm':
-        draw_mask = not draw_mask
-    elif event.name == 's':
-        draw_stats = not draw_stats
-    elif event.name == 'q':
-        terminate_program = True
 
 # Função para escutar mensagens UDP
 def listen_udp():
@@ -40,8 +30,6 @@ def listen_udp():
             analyzing = True
             start_time = time.time()
 
-# Inicia o hook para eventos de teclado
-keyboard.on_press(on_key_event)
 
 # Inicializa o modelo e a captura de vídeo
 fl = FaceLandmarks(static_image_mode=False)
