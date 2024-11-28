@@ -75,7 +75,7 @@ emotions_idx_sorted = [1, 2, 0]
 with open('./modeldb5', 'rb') as f:
     model = pickle.load(f)
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(pm.CAM_INDEX)
 ret, frame = cap.read()
 
 # Thread para escutar mensagens UDP
@@ -84,43 +84,64 @@ udp_thread = threading.Thread(target=listen_udp)
 udp_thread.daemon = True
 udp_thread.start()
 
-while ret:
+print('starting loop:', ret)
+camera_fail_counter = 0
+while not terminate_program and camera_fail_counter < 3:
+    while ret:
+        ret, frame = cap.read()
+        if not ret:
+            print("can't read the camera")
+            break
+        camera_fail_counter = 0
+
+        # Se estiver analisando, verifica o tempo limite de 3 segundos
+        if analyzing:
+            face_landmarks = fl.get_face_landmarks(frame, draw=draw_mask)
+
+            if len(face_landmarks) == 1404:
+                output = model.predict_proba([face_landmarks])
+                max_val = max(output[0])
+                emotion = emotions_pt[output[0].tolist().index(max_val)]
+
+                if draw_stats:
+                    for idx, e_idx in enumerate(emotions_idx_sorted):
+                        e = emotions_pt[idx]
+                        text = f"{e} : {output[0][idx] * 100:.0f}%"
+                        color = (0, 255, 0) if output[0][idx] == max_val else (0, 0, 255)
+                        cv2.putText(frame,
+                                    text,
+                                    (10, frame.shape[0] - 10 - (len(emotions) - e_idx - 1) * 35),
+                                    cv2.FONT_HERSHEY_SIMPLEX,
+                                    1,
+                                    color,
+                                    3)
+
+                # Verifica se já passou o tempo limite de 3 segundos
+                if time.time() - start_time >= 3:
+                    print(f"Enviando emoção detectada: {emotion}")
+                    sock.sendto(emotion.encode(), (UDP_IP, UDP_PORT_SENDER))  # Envia a emoção via UDP
+                    analyzing = False  # Para a análise temporária
+
+        cv2.imshow('frame', frame)
+        if cv2.waitKey(25) & 0xFF == ord('q'):
+            print('normal exit')
+            terminate_program = True
+            break
+
+    camera_fail_counter += 1
+
+    # sleeps for 30 seconds
+    time.sleep(30)
+
+    print(f"Trying to re-initialize the camera for the {camera_fail_counter} time.")
+    # try to re-initialize the camera
+    cap = cv2.VideoCapture(pm.CAM_INDEX)
     ret, frame = cap.read()
-    if terminate_program:
-        break
 
-    # Se estiver analisando, verifica o tempo limite de 3 segundos
-    if analyzing:
-        face_landmarks = fl.get_face_landmarks(frame, draw=draw_mask)
-
-        if len(face_landmarks) == 1404:
-            output = model.predict_proba([face_landmarks])
-            max_val = max(output[0])
-            emotion = emotions_pt[output[0].tolist().index(max_val)]
-
-            if draw_stats:
-                for idx, e_idx in enumerate(emotions_idx_sorted):
-                    e = emotions_pt[idx]
-                    text = f"{e} : {output[0][idx] * 100:.0f}%"
-                    color = (0, 255, 0) if output[0][idx] == max_val else (0, 0, 255)
-                    cv2.putText(frame,
-                                text,
-                                (10, frame.shape[0] - 10 - (len(emotions) - e_idx - 1) * 35),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                1,
-                                color,
-                                3)
-
-            # Verifica se já passou o tempo limite de 3 segundos
-            if time.time() - start_time >= 3:
-                print(f"Enviando emoção detectada: {emotion}")
-                sock.sendto(emotion.encode(), (UDP_IP, UDP_PORT_SENDER))  # Envia a emoção via UDP
-                analyzing = False  # Para a análise temporária
-
-    cv2.imshow('frame', frame)
-    if cv2.waitKey(25) & 0xFF == ord('q'):
-        break
-
+if camera_fail_counter >= 3:
+    print("Reinitialization of the camera didn't work. Finishing the program.")
+else:
+    print("Finishing the program")
 
 cap.release()
 cv2.destroyAllWindows()
